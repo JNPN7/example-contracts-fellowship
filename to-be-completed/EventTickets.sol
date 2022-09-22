@@ -1,6 +1,6 @@
 //SPDX-License-Identifier:MIT
 
-pragma solidity ^0.5.0;
+pragma solidity ^0.8.10;
 
     /*
         The EventTickets contract keeps track of the details and ticket sales of one event.
@@ -14,7 +14,7 @@ contract EventTickets {
         Use the appropriate keyword to allow ether transfers.
      */
     uint   TICKET_PRICE = 100 wei;
-    address public owner;
+    address payable public owner;
 
     /*
         Create a struct called "Event".
@@ -60,8 +60,8 @@ contract EventTickets {
         Set the owner to the creator of the contract.
         Set the appropriate myEvent details.
     */
-    constructor(string memory _description, string memory _url, uint256 _tickets) public {
-        owner = msg.sender;
+    constructor(string memory _description, string memory _url, uint256 _tickets) {
+        owner = payable(msg.sender);
         myEvent.description = _description;
         myEvent.url = _url;
         myEvent.totalTickets = _tickets;
@@ -112,12 +112,15 @@ contract EventTickets {
     function buyTickets(uint256 no_of_tickets) payable public {
         require(myEvent.isOpen, "Event is closed");
         require(no_of_tickets < myEvent.totalTickets, "Tickets not availble");
+        require((no_of_tickets*TICKET_PRICE) <= msg.value,"insufficient amount");
         // check if transcation value is sufficient or not
 
-        myEvent.sales += no_of_tickets;
+        myEvent.sales += no_of_tickets*TICKET_PRICE;
         myEvent.totalTickets -= no_of_tickets;
         
         // refund 
+        uint surplus = msg.value - no_of_tickets*TICKET_PRICE;
+        payable(msg.sender).transfer(surplus);
         emit LogBuyTickets(msg.sender, no_of_tickets);
     }
 
@@ -134,9 +137,11 @@ contract EventTickets {
         require(myEvent.buyers[msg.sender] <= 0, "You haven't bought any ticktes");
         address sender = msg.sender;
         uint tickets_bought = myEvent.buyers[sender];
-        myEvent.sales -= tickets_bought;
+        myEvent.sales -= tickets_bought*TICKET_PRICE;
         myEvent.totalTickets += tickets_bought;
         delete myEvent.buyers[sender];
+
+        payable(msg.sender).transfer(tickets_bought*TICKET_PRICE);
 
         emit LogGetRefund(msg.sender, tickets_bought);
     }
@@ -152,6 +157,7 @@ contract EventTickets {
             - emit the appropriate event
     */
     function endSale() public checkIsOwner {
+        owner.transfer(address(this).balance);
         myEvent.isOpen = false;
         emit LogEndSale(owner, 123);
     }
